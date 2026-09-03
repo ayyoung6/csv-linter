@@ -8,7 +8,9 @@
   },
   "scripts": {
     "build": "tsc",
-    "start": "node dist/cli.js"
+    "start": "node dist/cli.js",
+    "pretest": "npm run build",
+    "test": "node --test dist/"
   },
   "engines": {
     "node": ">=18"

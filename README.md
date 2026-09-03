@@ -67,7 +67,25 @@ file, like every row having the same number of fields as the header.
 would: file:line:column, the message, the offending source line, and a
 caret under the exact character.
 
+## Testing
+
+Tests use the built-in `node:test` runner, no test framework dependency:
+
+```
+npm test
+```
+
+`src/parser.test.ts` covers the parser's edge cases directly: quoted
+fields, doubled-quote escapes, CRLF vs LF, files with no trailing newline,
+and the exact positions reported for unterminated quotes and text glued
+onto a field after its closing quote. `src/rules.test.ts` covers the
+field-count and header-name checks.
+
 ## Status
 
-Early. No dependencies, no test suite yet, one rule file. See below for
-what's next.
+Early, one rule file. What's next, in order:
+
+1. `--format=json` output for CI integration
+2. a rule for inconsistent line endings across the file
+3. reading CSV from stdin
+4. a config file to enable or disable specific rule codes
