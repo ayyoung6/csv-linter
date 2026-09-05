@@ -22,19 +22,33 @@ function formatFinding(filePath: string, sourceLines: string[], finding: Finding
   ].join('\n');
 }
 
-function lintFile(path: string): number {
+type FileResult =
+  | { path: string; readError: string }
+  | { path: string; findings: Finding[]; text: string };
+
+function lintFile(path: string): FileResult {
   let text: string;
   try {
     text = readFileSync(path, 'utf8');
   } catch (error) {
-    process.stderr.write(`${path}: cannot read file (${(error as Error).message})\n`);
-    return 2;
+    return { path, readError: (error as Error).message };
   }
 
   const { rows, findings } = parseCsv(text);
   findings.push(...checkFieldCounts(rows));
   findings.push(...checkHeaderNames(rows));
   findings.sort((a, b) => a.position.line - b.position.line || a.position.column - b.position.column);
+
+  return { path, findings, text };
+}
+
+function printText(result: FileResult): number {
+  if ('readError' in result) {
+    process.stderr.write(`${result.path}: cannot read file (${result.readError})\n`);
+    return 2;
+  }
+
+  const { path, findings, text } = result;
 
   if (findings.length === 0) {
     process.stdout.write(`${path}: no problems found\n`);
@@ -55,16 +69,68 @@ function lintFile(path: string): number {
   return errorCount > 0 ? 1 : 0;
 }
 
+// One JSON object for the whole run, not one per file, so a CI step can
+// pipe stdout straight into `JSON.parse` without splitting on newlines.
+function printJson(results: FileResult[]): number {
+  let exitCode = 0;
+  const files = results.map((result) => {
+    if ('readError' in result) {
+      exitCode = Math.max(exitCode, 2);
+      return { path: result.path, readError: result.readError, findings: [] as Finding[] };
+    }
+
+    const errorCount = result.findings.filter((f) => f.severity === 'error').length;
+    exitCode = Math.max(exitCode, errorCount > 0 ? 1 : 0);
+    return { path: result.path, findings: result.findings };
+  });
+
+  process.stdout.write(`${JSON.stringify({ files }, null, 2)}\n`);
+  return exitCode;
+}
+
+function parseArgs(argv: string[]): { format: 'text' | 'json'; paths: string[] } {
+  let format: 'text' | 'json' = 'text';
+  const paths: string[] = [];
+
+  for (const arg of argv.slice(2)) {
+    if (arg === '--format=json') {
+      format = 'json';
+    } else if (arg === '--format=text') {
+      format = 'text';
+    } else if (arg.startsWith('--format=')) {
+      throw new Error(`unknown format "${arg.slice('--format='.length)}" (expected "text" or "json")`);
+    } else {
+      paths.push(arg);
+    }
+  }
+
+  return { format, paths };
+}
+
 function main(argv: string[]): number {
-  const paths = argv.slice(2);
-  if (paths.length === 0) {
-    process.stderr.write('usage: csv-linter <file.csv> [file2.csv ...]\n');
+  let format: 'text' | 'json';
+  let paths: string[];
+  try {
+    ({ format, paths } = parseArgs(argv));
+  } catch (error) {
+    process.stderr.write(`${(error as Error).message}\n`);
     return 1;
   }
 
+  if (paths.length === 0) {
+    process.stderr.write('usage: csv-linter [--format=text|json] <file.csv> [file2.csv ...]\n');
+    return 1;
+  }
+
+  const results = paths.map(lintFile);
+
+  if (format === 'json') {
+    return printJson(results);
+  }
+
   let exitCode = 0;
-  for (const path of paths) {
-    exitCode = Math.max(exitCode, lintFile(path));
+  for (const result of results) {
+    exitCode = Math.max(exitCode, printText(result));
   }
   return exitCode;
 }

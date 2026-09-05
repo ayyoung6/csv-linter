@@ -40,6 +40,32 @@ sample.csv: 1 error, 0 warnings
 The exit code is `1` if any errors were found, `0` otherwise, so it can be
 used as a CI check.
 
+Pass `--format=json` for machine-readable output instead of the caret-annotated
+text above:
+
+```
+$ node dist/cli.js --format=json sample.csv
+{
+  "files": [
+    {
+      "path": "sample.csv",
+      "findings": [
+        {
+          "severity": "error",
+          "code": "field-count-mismatch",
+          "message": "row has 4 fields but the header defines 3 (unexpected extra value \"clearance\")",
+          "position": { "line": 3, "column": 16, "offset": 33 }
+        }
+      ]
+    }
+  ]
+}
+```
+
+A file that could not be read gets a `"readError"` field instead of
+`"findings"`. The exit code follows the same rule as text mode: 1 if any file
+has an error-severity finding, 2 if any file could not be read.
+
 ## Rules
 
 | code                   | severity | what it catches                                            |
@@ -85,7 +111,6 @@ field-count and header-name checks.
 
 Early, one rule file. What's next, in order:
 
-1. `--format=json` output for CI integration
-2. a rule for inconsistent line endings across the file
-3. reading CSV from stdin
-4. a config file to enable or disable specific rule codes
+1. a rule for inconsistent line endings across the file
+2. reading CSV from stdin
+3. a config file to enable or disable specific rule codes
