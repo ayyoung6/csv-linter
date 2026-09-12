@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
 import { parseCsv, type Finding } from './parser.js';
-import { checkFieldCounts, checkHeaderNames } from './rules.js';
+import { checkFieldCounts, checkHeaderNames, checkLineEndings } from './rules.js';
 
 // Formatted like a compiler diagnostic on purpose: a bare "line 12: bad
 // row" makes you go count columns by hand. Pointing at the exact character
@@ -37,6 +37,7 @@ function lintFile(path: string): FileResult {
   const { rows, findings } = parseCsv(text);
   findings.push(...checkFieldCounts(rows));
   findings.push(...checkHeaderNames(rows));
+  findings.push(...checkLineEndings(rows));
   findings.sort((a, b) => a.position.line - b.position.line || a.position.column - b.position.column);
 
   return { path, findings, text };

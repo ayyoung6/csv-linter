@@ -75,6 +75,7 @@ has an error-severity finding, 2 if any file could not be read.
 | `field-count-mismatch` | error    | a row with more or fewer fields than the header row          |
 | `empty-header-name`    | warning  | a header column with no name                                 |
 | `duplicate-header-name`| warning  | the same column name used twice in the header                |
+| `inconsistent-line-ending` | warning | a line ending that doesn't match the rest of the file (mixed LF/CRLF/CR) |
 
 ## How it's built
 
@@ -87,7 +88,8 @@ returns rows of fields plus any parse-level findings (unterminated or
 malformed quotes).
 
 `src/rules.ts` takes the parsed rows and checks properties across the whole
-file, like every row having the same number of fields as the header.
+file, like every row having the same number of fields as the header, or
+every row using the same line ending.
 
 `src/cli.ts` ties them together and formats findings the way a compiler
 would: file:line:column, the message, the offending source line, and a
@@ -105,12 +107,11 @@ npm test
 fields, doubled-quote escapes, CRLF vs LF, files with no trailing newline,
 and the exact positions reported for unterminated quotes and text glued
 onto a field after its closing quote. `src/rules.test.ts` covers the
-field-count and header-name checks.
+field-count, header-name, and line-ending checks.
 
 ## Status
 
 Early, one rule file. What's next, in order:
 
-1. a rule for inconsistent line endings across the file
-2. reading CSV from stdin
-3. a config file to enable or disable specific rule codes
+1. reading CSV from stdin
+2. a config file to enable or disable specific rule codes

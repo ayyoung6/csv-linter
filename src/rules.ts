@@ -1,4 +1,4 @@
-import type { Row, Finding } from './parser.js';
+import type { Row, Finding, LineEnding } from './parser.js';
 
 const MAX_SNIPPET_LENGTH = 30;
 
@@ -87,6 +87,47 @@ export function checkHeaderNames(rows: Row[]): Finding[] {
       position: field.start,
     });
   });
+
+  return findings;
+}
+
+const LINE_ENDING_LABEL: Record<Exclude<LineEnding, 'none'>, string> = {
+  lf: 'LF',
+  crlf: 'CRLF',
+  cr: 'CR',
+};
+
+// A file exported from one tool and hand-edited in another often ends up
+// with a mix of \n and \r\n. Every parser tolerates that silently, but it's
+// a sign the file was touched by two different pipelines and diffs badly.
+export function checkLineEndings(rows: Row[]): Finding[] {
+  const findings: Finding[] = [];
+
+  const terminated = rows.filter((row) => row.lineEnding !== 'none');
+  if (terminated.length === 0) return findings;
+
+  const counts = new Map<LineEnding, number>();
+  for (const row of terminated) {
+    counts.set(row.lineEnding, (counts.get(row.lineEnding) ?? 0) + 1);
+  }
+
+  let dominant: LineEnding = terminated[0].lineEnding;
+  for (const [ending, count] of counts) {
+    if (count > (counts.get(dominant) ?? 0)) dominant = ending;
+  }
+
+  if (counts.size <= 1) return findings;
+
+  for (const row of terminated) {
+    if (row.lineEnding === dominant) continue;
+
+    findings.push({
+      severity: 'warning',
+      code: 'inconsistent-line-ending',
+      message: `line ends with ${LINE_ENDING_LABEL[row.lineEnding as Exclude<LineEnding, 'none'>]} but most of the file uses ${LINE_ENDING_LABEL[dominant as Exclude<LineEnding, 'none'>]}`,
+      position: row.lineEndingPosition,
+    });
+  }
 
   return findings;
 }

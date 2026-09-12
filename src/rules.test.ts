@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseCsv } from './parser.js';
-import { checkFieldCounts, checkHeaderNames } from './rules.js';
+import { checkFieldCounts, checkHeaderNames, checkLineEndings } from './rules.js';
 
 test('checkFieldCounts flags rows with too many or too few fields', () => {
   const { rows } = parseCsv('id,name,price\n1,Widget,9.99\n2,Gadget,19.99,clearance\n3,Sprocket\n');
@@ -61,4 +61,30 @@ test('checkHeaderNames finds nothing for unique, named columns', () => {
 test('checkHeaderNames returns nothing for an empty file', () => {
   const { rows } = parseCsv('');
   assert.deepEqual(checkHeaderNames(rows), []);
+});
+
+test('checkLineEndings flags the minority line ending against the dominant one', () => {
+  const { rows } = parseCsv('a,b\r\nc,d\r\ne,f\n');
+  const findings = checkLineEndings(rows);
+
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].code, 'inconsistent-line-ending');
+  assert.equal(findings[0].severity, 'warning');
+  assert.match(findings[0].message, /line ends with LF but most of the file uses CRLF/);
+  assert.equal(findings[0].position.line, 3);
+});
+
+test('checkLineEndings says nothing when every line ending matches', () => {
+  const { rows } = parseCsv('a,b\r\nc,d\r\n');
+  assert.equal(checkLineEndings(rows).length, 0);
+});
+
+test('checkLineEndings ignores the final line when the file has no trailing newline', () => {
+  const { rows } = parseCsv('a,b\r\nc,d\r\ne,f');
+  assert.equal(checkLineEndings(rows).length, 0);
+});
+
+test('checkLineEndings returns nothing for an empty file', () => {
+  const { rows } = parseCsv('');
+  assert.deepEqual(checkLineEndings(rows), []);
 });

@@ -11,10 +11,16 @@ export interface Field {
   end: Position;
 }
 
+export type LineEnding = 'lf' | 'cr' | 'crlf' | 'none';
+
 export interface Row {
   fields: Field[];
   startLine: number;
   endLine: number;
+  // 'none' means the row ended at end-of-file with no trailing newline, which
+  // is not a mismatch worth flagging on its own.
+  lineEnding: LineEnding;
+  lineEndingPosition: Position;
 }
 
 export interface Finding {
@@ -82,9 +88,9 @@ export function parseCsv(text: string): ParseResult {
     fields.push({ value: fieldValue, quoted, start: fieldStart, end: currentPosition() });
   }
 
-  function endRow(): void {
+  function endRow(lineEnding: LineEnding, lineEndingPosition: Position): void {
     endField();
-    rows.push({ fields, startLine: rowStartLine, endLine: line });
+    rows.push({ fields, startLine: rowStartLine, endLine: line, lineEnding, lineEndingPosition });
     fields = [];
     rowStartLine = line;
     pendingEmptyRow = true;
@@ -144,16 +150,22 @@ export function parseCsv(text: string): ParseResult {
     }
 
     if (ch === '\r') {
+      const lineEndingPosition = currentPosition();
       advance();
-      if (text[offset] === '\n') advance();
-      endRow();
+      let ending: LineEnding = 'cr';
+      if (text[offset] === '\n') {
+        advance();
+        ending = 'crlf';
+      }
+      endRow(ending, lineEndingPosition);
       startField();
       continue;
     }
 
     if (ch === '\n') {
+      const lineEndingPosition = currentPosition();
       advance();
-      endRow();
+      endRow('lf', lineEndingPosition);
       startField();
       continue;
     }
@@ -173,7 +185,7 @@ export function parseCsv(text: string): ParseResult {
   // A trailing newline should not produce a phantom empty row, but a file
   // that ends mid-field (no trailing newline) still needs its last row.
   if (!pendingEmptyRow) {
-    endRow();
+    endRow('none', currentPosition());
   }
 
   return { rows, findings };
