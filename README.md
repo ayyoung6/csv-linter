@@ -40,6 +40,19 @@ sample.csv: 1 error, 0 warnings
 The exit code is `1` if any errors were found, `0` otherwise, so it can be
 used as a CI check.
 
+It also reads from stdin, either implicitly (when no paths are given and
+stdin isn't a terminal) or explicitly with `-`:
+
+```
+$ cat sample.csv | node dist/cli.js
+-:3:16 - error: row has 4 fields but the header defines 3 (unexpected extra value "clearance")
+  |
+3 | 2,Gadget,19.99,clearance
+  |                ^
+
+-: 1 error, 0 warnings
+```
+
 Pass `--format=json` for machine-readable output instead of the caret-annotated
 text above:
 
@@ -113,5 +126,4 @@ field-count, header-name, and line-ending checks.
 
 Early, one rule file. What's next, in order:
 
-1. reading CSV from stdin
-2. a config file to enable or disable specific rule codes
+1. a config file to enable or disable specific rule codes

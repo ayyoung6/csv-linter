@@ -26,14 +26,11 @@ type FileResult =
   | { path: string; readError: string }
   | { path: string; findings: Finding[]; text: string };
 
-function lintFile(path: string): FileResult {
-  let text: string;
-  try {
-    text = readFileSync(path, 'utf8');
-  } catch (error) {
-    return { path, readError: (error as Error).message };
-  }
+// A lone "-" means stdin, following the convention of cat, grep, etc. File
+// descriptor 0 can be read synchronously with readFileSync just like a path.
+const STDIN_PATH = '-';
 
+function lintText(path: string, text: string): FileResult {
   const { rows, findings } = parseCsv(text);
   findings.push(...checkFieldCounts(rows));
   findings.push(...checkHeaderNames(rows));
@@ -41,6 +38,17 @@ function lintFile(path: string): FileResult {
   findings.sort((a, b) => a.position.line - b.position.line || a.position.column - b.position.column);
 
   return { path, findings, text };
+}
+
+function lintFile(path: string): FileResult {
+  let text: string;
+  try {
+    text = path === STDIN_PATH ? readFileSync(0, 'utf8') : readFileSync(path, 'utf8');
+  } catch (error) {
+    return { path, readError: (error as Error).message };
+  }
+
+  return lintText(path, text);
 }
 
 function printText(result: FileResult): number {
@@ -119,8 +127,11 @@ function main(argv: string[]): number {
   }
 
   if (paths.length === 0) {
-    process.stderr.write('usage: csv-linter [--format=text|json] <file.csv> [file2.csv ...]\n');
-    return 1;
+    if (process.stdin.isTTY) {
+      process.stderr.write('usage: csv-linter [--format=text|json] <file.csv | -> [file2.csv ...]\n');
+      return 1;
+    }
+    paths = [STDIN_PATH];
   }
 
   const results = paths.map(lintFile);
